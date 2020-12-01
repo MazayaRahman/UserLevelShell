@@ -1,8 +1,0 @@
-a.out
-cshell
-cshell.c
-duptest.c
-README.md
-shell.c
-test.txt
-tricky.txt

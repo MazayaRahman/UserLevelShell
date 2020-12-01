@@ -112,15 +112,19 @@ int main(int argc, char **argv) {
                         if(redir_exists){
                             
                             if(strcmp(target,">") == 0){
+                                //remove file if it already exists
+                                remove(routeTo);
+                                //create a new file
                                 FILE *fp;
                                 fp  = fopen (routeTo, "w");
                                 fclose (fp);
+                                //initialize file desc with both write and append options
                                 file_desc = open(routeTo, O_WRONLY|O_APPEND); 
                                 printf("its write\n");
                             }
                             else{
                                 
-                                file_desc = open(routeTo, O_APPEND); 
+                                file_desc = open(routeTo, O_WRONLY|O_APPEND); 
                                 printf("its append\n");
                             }
       
