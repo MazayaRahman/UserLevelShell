@@ -109,6 +109,11 @@ fork_pipes (int n, struct command *cmd)
     dup2(file_desc, 1); 
     close(file_desc);
   }
+  //CHECK IF ITS A CD COMMAND
+  else if(strcmp(cmd [i].argv [0], "cd") == 0){
+    chdir(cmd [i].argv [1]);
+    return;
+  }
  
   return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
   
