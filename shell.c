@@ -13,6 +13,13 @@ char* curr_command;
 
 int n_spaces = 0;
 
+char output[500]; 
+
+struct command
+{
+  const char **argv;
+};
+
 int main(int argc, char **argv) {
 
     char cwd[PATH_MAX];
@@ -102,9 +109,12 @@ int main(int argc, char **argv) {
                     for (i = 0; i < (p_spaces); ++i)
                     printf ("pipe_tokens[%d] = %s\n", i, pipe_tokens[i]);
                 }
-                int k = 0;
-                for (k = 0; k <= (p_spaces); ++k){
 
+                struct command cmds_exec [p_spaces];
+
+                for (int k = 0; k <= (p_spaces); ++k){
+
+                    //TOKENIZE EACH PIPE TOKEN BY SPACE
                     if(pipe_exists){
                         strcpy(curr_token, pipe_tokens[k]);
                     }
@@ -113,7 +123,7 @@ int main(int argc, char **argv) {
                     char ** args  = NULL;
                     char *  p    = strtok (curr_token, " ");
                     int n_spaces = 0;
-
+                    
 
                     /* split string and append tokens to 'res' */
 
@@ -139,193 +149,245 @@ int main(int argc, char **argv) {
                     for (i = 0; i < (n_spaces+1); ++i)
                         printf ("args[%d] = %s\n", i, args[i]);
 
-                    //ARGS IS READY
+                    //ARGS IS READY, PUT INTO CMDS
 
-                    if(strcmp(args[0], "cd") == 0){
-                        chdir(args[1]);
-                    }
-                    else{
+                    cmds_exec[k].argv = args;
 
-                        //carry out the command
-                        pid_t child_process_id = fork();
-                        if(child_process_id == 0){
-                            if(redir_exists){
-                                
-                                if(strcmp(target,">") == 0){
-                                    //remove file if it already exists
-                                    remove(routeTo);
-                                    //create a new file
-                                    FILE *fp;
-                                    fp  = fopen (routeTo, "w");
-                                    fclose (fp);
-                                    //initialize file desc with both write and append options
-                                    file_desc = open(routeTo, O_WRONLY|O_APPEND); 
-                                    printf("its write\n");
-                                }
-                                else{
-                                    
-                                    file_desc = open(routeTo, O_WRONLY|O_APPEND); 
-                                    printf("its append\n");
-                                }
-        
-                                
-                                // here the newfd is the file descriptor of stdout (i.e. 1) 
-                                dup2(file_desc, 1); 
-                                close(file_desc);
-
-                                execvp(args[0], args);
-
-
-                            }
-                            else{
-                                execvp(args[0], args);
-                            }
-    
-                        }
-                        else{
-                            //wait for child
-                            wait(NULL);
-                            redir_exists = 0;
-                            //dup2(1, file_desc);                            
-                        }
-                        
-                        if(k == p_spaces-1) break;
-                    }
-
+                    if(k == p_spaces-1) break;
                 }
 
-                //////////////////////////////////////////////////////////////////////////////
-                //TOKENIZING BY SPACE
-                // if(pipe_exists){
-                //     printf("pipe exists");
-                //     //GO THROUGH EACH CMD IN FOR LOOP AND ROUTE ONE TO NEXT
-                //     for (i = 0; i < (p_spaces); ++i){
-
-                //     }
-                // }
-                // else{
-                //     printf("no pipes");
-                //     char ** args  = NULL;
-                //     char *  p    = strtok (curr_token, " ");
-                //     int n_spaces = 0;
+                fork_pipes(p_spaces, cmds_exec);
 
 
-                //     /* split string and append tokens to 'res' */
-
-                //     while (p) {
-                //         args = realloc (args, sizeof (char*) * ++n_spaces);
-
-                //         if (args == NULL)
-                //             exit (-1); /* memory allocation failed */
-
-                //         args[n_spaces-1] = p;
-
-                //         p = strtok (NULL, " ");
-                //     }
-
-                //     /* realloc one extra element for the last NULL */
-
-                //     args = realloc (args, sizeof (char*) * (n_spaces+1));
-                //     args[n_spaces] = 0;
-
-                //     /* print the result */
 
 
-                //     for (i = 0; i < (n_spaces+1); ++i)
-                //         printf ("args[%d] = %s\n", i, args[i]);
+/////////////////////////////////////////////////////////////////////////
+        //         int k = 0;
 
-                //     //ARGS IS READY
+        //         int num_pipes = p_spaces-1;
+        //         printf("num of pipes %d\n", num_pipes);
 
-                //     if(strcmp(args[0], "cd") == 0){
-                //         chdir(args[1]);
-                //     }
-                //     else{
+        //         //SETTING UP PIPES
+        //         int pipes[num_pipes];
+        //         for(int j = 0; j < num_pipes; j+=2){ //incrementing pipes by 2
+        //             pipe(pipes + j);
+        //         }
 
-                //         //carry out the command
-                //         pid_t child_process_id = fork();
-                //         if(child_process_id == 0){
-                //             if(redir_exists){
-                                
-                //                 if(strcmp(target,">") == 0){
-                //                     //remove file if it already exists
-                //                     remove(routeTo);
-                //                     //create a new file
-                //                     FILE *fp;
-                //                     fp  = fopen (routeTo, "w");
-                //                     fclose (fp);
-                //                     //initialize file desc with both write and append options
-                //                     file_desc = open(routeTo, O_WRONLY|O_APPEND); 
-                //                     printf("its write\n");
-                //                 }
-                //                 else{
+
+        //         for (k = 0; k <= (p_spaces); ++k){
+
+        //             if(pipe_exists){
+        //                 strcpy(curr_token, pipe_tokens[k]);
+        //             }
+        //             printf("i is %d curr token is %s\n", k, curr_token);
+
+        //             char ** args  = NULL;
+        //             char *  p    = strtok (curr_token, " ");
+        //             int n_spaces = 0;
+                    
+
+        //             /* split string and append tokens to 'res' */
+
+        //             while (p) {
+        //                 args = realloc (args, sizeof (char*) * ++n_spaces);
+
+        //                 if (args == NULL)
+        //                     exit (-1); /* memory allocation failed */
+
+        //                 args[n_spaces-1] = p;
+
+        //                 p = strtok (NULL, " ");
+        //             }
+
+        //             /* realloc one extra element for the last NULL */
+
+        //             args = realloc (args, sizeof (char*) * (n_spaces+1));
+        //             args[n_spaces] = 0;
+
+        //             /* print the result */
+
+
+        //             for (i = 0; i < (n_spaces+1); ++i)
+        //                 printf ("args[%d] = %s\n", i, args[i]);
+
+        //             //ARGS IS READY
+
+        //             if(strcmp(args[0], "cd") == 0){
+        //                 chdir(args[1]);
+        //             }
+        //             else{
+
+        //                 //carry out the command
+        //                 pid_t child_process_id = fork();
+        //                 if(child_process_id == 0){
+        //                     if(pipe_exists){
+        //                         if(k==0){ //FIRST PIPE TOKEN
+        //                             //set write to pipe
+        //                             printf("set pipe at 1 to stdin\n");
+        //                             dup2(pipes[1], 1);
+
                                     
-                //                     file_desc = open(routeTo, O_WRONLY|O_APPEND); 
-                //                     printf("its append\n");
-                //                 }
-        
-                //                 //save_stdin = dup(1);
-                //                 // here the newfd is the file descriptor of stdout (i.e. 1) 
-                //                 dup2(file_desc, 1); 
-                //                 close(file_desc);
 
-                //                 execvp(args[0], args);
-                //                 //dup2(1, file_desc);
+        //                             for(int j = 0; j < num_pipes; j++){
+        //                                 close(pipes[j]);
+        //                             }
 
+        //                         }
+        //                         else if(k == p_spaces-1){ //LAST PIPE TOKEN
+        //                             //set read from pipe
+        //                             printf("set pipe at %d to stdin\n", k-1);
+        //                             dup2(pipes[k-1], 0); //setting input of cmd from pipe
 
-                //             }
-                //             else{
-                //                 execvp(args[0], args);
-                //             }
-    
-                //         }
-                //         else{
-                //             //wait for child
-                //             wait(NULL);
-                //             redir_exists = 0;
-                //             //dup2(1, file_desc);
+                                    
+        //                             for(int j = 0; j < num_pipes; j++){
+        //                                 close(pipes[j]);
+        //                             }
+        //                         }
+        //                         else{
+        //                             //set read from pipe
+        //                             //set write to pipe
+        //                             printf("set pipe at %d to stdin\n", k-1);
+        //                             printf("set pipe at %d to stdout\n", k+2);
+        //                             dup2(pipes[k-1], 0); //setting input of cmd from pipe
+
+        //                             dup2(pipes[k+2], 1); //setting stdout of cmd to pipe
+
+                                    
+
+        //                             for(int j = 0; j < num_pipes; j++){
+        //                                 close(pipes[j]);
+        //                             }
+        //                         }
+        //                     }
+
                             
-                //         }
+
+        //                     if(redir_exists){
+                                
+        //                         if(strcmp(target,">") == 0){
+        //                             //remove file if it already exists
+        //                             remove(routeTo);
+        //                             //create a new file
+        //                             FILE *fp;
+        //                             fp  = fopen (routeTo, "w");
+        //                             fclose (fp);
+        //                             //initialize file desc with both write and append options
+        //                             file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+        //                             printf("its write\n");
+        //                         }
+        //                         else{
+                                    
+        //                             file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+        //                             printf("its append\n");
+        //                         }
+        
+                                
+        //                         // here the newfd is the file descriptor of stdout (i.e. 1) 
+        //                         dup2(file_desc, 1); 
+        //                         close(file_desc);
+
+        //                         execvp(args[0], args);
+
+
+        //                     }
+        //                     else{
+        //                         execvp(args[0], args);
+                                
+        //                         read(pipes[0], output, 500);
+        //                         printf("output: %s\n", output);
+        //                     }
+    
+        //                 }
+        //                 else{
+        //                     for(int j = 0; j < num_pipes; j++){
+        //                         close(pipes[j]);
+        //                     }
+
+        //                     //wait for child
+        //                     wait(NULL);
+        //                     redir_exists = 0;
+        //                     //dup2(1, file_desc);                            
+        //                 }
                         
+        //                 if(k == p_spaces-1) break;
+        //                 printf("output: %s\n", output);
+        //             }
 
-                //     }
-                // }
+        //         }
 
+                                
 
-                
-
-                pipe_exists = 0;
-                printf("command complete\n");
-            }
-        }
-        else{
-            perror("getcwd() error");
-            return 1;
-        }
+        //         pipe_exists = 0;
+        //         printf("command complete\n");
+        //     }
+        // }
+        // else{
+        //     perror("getcwd() error");
+        //     return 1;
+        // }
     }  
 }
+    }}
 
-char** tokenizeBySpace(char* cmd){
-    char ** args  = NULL;
-    char *  p    = strtok (cmd, " ");
-    n_spaces = 0;
+int
+spawn_proc (int in, int out, struct command *cmd)
+{
+  pid_t pid;
 
+  if ((pid = fork ()) == 0)
+    {
+      if (in != 0)
+        {
+          dup2 (in, 0);
+          close (in);
+        }
 
-    /* split string and append tokens to 'res' */
+      if (out != 1)
+        {
+          dup2 (out, 1); //comd output to pipe out
+          close (out);
+        }
 
-    while (p) {
-                        args = realloc (args, sizeof (char*) * ++n_spaces);
-
-                        if (args == NULL)
-                            exit (-1); /* memory allocation failed */
-
-                        args[n_spaces-1] = p;
-
-                        p = strtok (NULL, " ");
+      return execvp (cmd->argv [0], (char * const *)cmd->argv);
     }
 
-                    /* realloc one extra element for the last NULL */
-
-                    args = realloc (args, sizeof (char*) * (n_spaces+1));
-                    args[n_spaces] = 0;
-    return args;
+  return pid;
 }
+
+int
+fork_pipes (int n, struct command *cmd)
+{
+  int i;
+  pid_t pid;
+  int in, fd [2];
+
+  /* The first process should get its input from the original file descriptor 0.  */
+  in = 0;
+
+  /* Note the loop bound, we spawn here all, but the last stage of the pipeline.  */
+  for (i = 0; i < n - 1; ++i)
+    {
+      pipe (fd);
+
+      /* f [1] is the write end of the pipe, we carry `in` from the prev iteration.  */
+      spawn_proc (in, fd [1], cmd + i);
+
+      /* No need for the write end of the pipe, the child will write here.  */
+      close (fd [1]);
+
+      /* Keep the read end of the pipe, the next child will read from there.  */
+      in = fd [0];
+    }
+
+  /* Last stage of the pipeline - set stdin be the read end of the previous pipe
+     and output to the original file descriptor 1. */  
+  if (in != 0)
+    dup2 (in, 0);
+
+  /* Execute the last stage with the current process. */
+  printf("last cmd %s\n", cmd[i].argv[0]);
+  return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
+  //FOR LAST CMD, CHECK IF REDIR EXISTS (> OR >>), IF IT DOES, INSTEAD OF STDOUT, DIRECT TO FILE
+}
+
+

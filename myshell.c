@@ -9,7 +9,6 @@
 #include<fcntl.h> 
 
 int PATH_MAX = 100;
-char* curr_command;
 
 int n_spaces = 0;
 char* redir_target;
@@ -35,7 +34,7 @@ spawn_proc (int in, int out, struct command *cmd)
 
       if (out != 1)
         {
-            printf("setting output to fd\n");
+        printf("setting output to fd\n");
           dup2 (out, 1); //comd output to pipe out
           close (out);
         }
@@ -53,6 +52,13 @@ fork_pipes (int n, struct command *cmd)
   pid_t pid;
   int in, fd [2];
 
+  int status = 0;
+  int wpid;
+
+  int stdin = 0;
+  int stdout = 1;
+  int temp_stdout;
+
   /* The first process should get its input from the original file descriptor 0.  */
   in = 0;
 
@@ -64,24 +70,44 @@ fork_pipes (int n, struct command *cmd)
       /* f [1] is the write end of the pipe, we carry `in` from the prev iteration.  */
       spawn_proc (in, fd [1], cmd + i);
 
+      temp_stdout = fd[1];
       /* No need for the write end of the pipe, the child will write here.  */
       close (fd [1]);
+      
 
       /* Keep the read end of the pipe, the next child will read from there.  */
       in = fd [0];
+      
     }
 
-    
+    // char* test = readline("enter smth");
+    //   printf("test is %s\n", test);
     printf("in is %d\n", in);
     
   /* Last stage of the pipeline - set stdin be the read end of the previous pipe
      and output to the original file descriptor 1. */  
-  if (in != 0)
+  if (in != 0){
+    printf("in, 0\n");
     dup2 (in, 0);
-
+    //dup2(temp_stdout, 1);
+  }
+    
   /* Execute the last stage with the current process. */
-  printf("last cmd %s\n", cmd[i].argv[0]);
-  return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
+  //printf("last cmd %s\n", cmd[i].argv[0]);
+  if(fork() == 0){
+      execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
+  }else{
+    while ((wpid = wait(&status)) > 0);
+      //wait(NULL);
+        //printf("in is %d out is %d]\n", in, fd[1]);
+      // close (fd [0]);
+      // close (fd [1]);
+
+      // char* test = readline("");
+      // printf("test is %s\n", test);
+
+      return 1;
+  }
   //FOR LAST CMD, CHECK IF REDIR EXISTS (> OR >>), IF IT DOES, INSTEAD OF STDOUT, DIRECT TO FILE
 }
 
@@ -90,6 +116,9 @@ int main(int argc, char **argv) {
     char cwd[PATH_MAX];
     char curr_token[100];
     char curr_cmd[100];
+
+    char* curr_command = malloc(sizeof(char)* 200);
+
 
     int redir_exists = 0;
     int pipe_exists = 0;
@@ -101,9 +130,13 @@ int main(int argc, char **argv) {
     struct command* cmds_exec;
     
     while(1){
+      
         if(getcwd(cwd, sizeof(cwd)) != NULL) { //SHOULD THIS BE A WHILE LOOP..?
             printf("%s $", cwd);
+
             curr_command = readline("");
+            if(curr_command == NULL) curr_command = readline("");
+
             printf("You entered %s\n", curr_command);
 
             if(strcmp(curr_command, "exit") == 0){
@@ -190,109 +223,55 @@ int main(int argc, char **argv) {
                     if(pipe_exists){
                         strcpy(curr_token, pipe_tokens[j]);
                     }
-                    if(j!=0) printf("look cmd args[%d] = %s\n", j-1, cmds_exec[j-1].argv[0]);
+                    char* tok = malloc(sizeof(curr_token));
+                    strcpy(tok, curr_token);
 
-                    printf("j is %d curr token is %s\n", j, curr_token);
-
-                    char* token_s;
-                    strcpy(token_s, curr_token);
-
-                    int num_cmd_parts = 0;
-                    printf("j is %d token_s is %s\n", j, token_s);
+                    printf("j is %d tok is %s\n", j, tok);
 
                     //TOKENIZE EACH CMD BY SPACE
-                    char ** args  = NULL;
-                    char *  p    = strtok (token_s, " ");
-                    n_spaces = 0;
+                    cmds_exec[j].argv = NULL;
+                    char *  p  = strtok (tok, " ");
+                    int n_spaces = 0;
                     int i = 0;
-                    
-                    if(j!=0) printf("look cmd args[%d] = %s\n", j-1, cmds_exec[j-1].argv[0]);
-                    /* split string and append tokens to 'res' */
 
+                    /* split string and append tokens to cmds array */
                     while (p) {
-                        args = realloc (args, sizeof (char*) * ++n_spaces);
+                        cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * ++n_spaces);
 
-                        if (args == NULL)
+                        if (cmds_exec[j].argv == NULL)
                             exit (-1); /* memory allocation failed */
 
-                        args[n_spaces-1] = p;
+                        cmds_exec[j].argv[n_spaces-1] = p;
 
-                        num_cmd_parts++;
                         p = strtok (NULL, " ");
                     }
-
-                    num_cmd_parts++; //for the null
 
                     /* realloc one extra element for the last NULL */
-
-                    args = realloc (args, sizeof (char*) * (n_spaces+1));
-                    args[n_spaces] = 0;
+                    cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * (n_spaces+1));
+                    cmds_exec[j].argv[n_spaces] = 0;
 
                     /* print the result */
-
                     for (i = 0; i < (n_spaces+1); ++i)
-                        printf ("args[%d] = %s\n", i, args[i]);
-
-
-
-                    cmds_exec[j].argv = malloc(num_cmd_parts*sizeof(char*));
-                    if(j!=0) printf("look cmd args[%d] = %s\n", j-1, cmds_exec[j-1].argv[0]);
-                    p = strtok (curr_token, " ");
-                    n_spaces = 0;
-                    while (p) {
-                        strcpy(cmds_exec[j].argv[n_spaces], p);
-                        //cmds_exec[j].argv[n_spaces] = p;
-                        n_spaces++;
-                        p = strtok (NULL, " ");
-                    }
-
-                    if(j!=0) printf("look cmd args[%d] = %s\n", j-1, cmds_exec[j-1].argv[0]);
-                    cmds_exec[j].argv[n_spaces] = 0;
- 
-                    if(j!=0) printf("look cmd args[%d] = %s\n", j-1, cmds_exec[j-1].argv[0]);
-
-                    // for (i = 0; i < n_spaces+1; ++i){
-                    //     //strcpy(cmds_exec[j].argv[i], args[i]);
-                    //     cmds_exec[j].argv[i] = args[i];
-                    // }
-                        
-                    printf("j is %d\n", j);
-                    for (i = 0; i < (n_spaces+1); ++i)
-                        printf ("cmd args[%d] = %s\n", i, cmds_exec[j].argv[i]);
-
-                    free(args);
-
-                    // const char *ls[] = { "ls", 0 };
-                    // const char *awk[] = { "wc", 0 };
-
-                    // cmds_exec[0].argv = ls;
-                    // cmds_exec[1].argv = awk;
-
-                    // for (i = 0; i < (2); ++i)
-                    //     printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
-
-                    // cmds_exec[j].argv = args;
-
-                    // for (i = 0; i < (n_spaces+1); ++i)
-                    //     printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
+                        printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
 
 
                     if(j == p_spaces-1) break;
                 }
 
                 
-                printf("first command %s\n", cmds_exec[0].argv[0]);
-                printf("last command %s\n", cmds_exec[1].argv[0]);
                 //COMMANDS ARE POPULATED
                 if(pipe_exists){
                     fork_pipes(p_spaces, cmds_exec);
                 }
                 else{
-                    //fork_pipes(1, cmds_exec);
+                    fork_pipes(1, cmds_exec);
                 }
                 
-                            
-                
+
+
+                //RESET STUFF BEFORE NEXT CMD          
+                pipe_exists = 0;
+                redir_exists = 0;
             }
 
 
