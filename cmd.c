@@ -78,7 +78,14 @@ fork_pipes (int n, struct command *cmd)
 
 int main(){
 
-    char* test_cmd = "ls|wc";
+  char* curr_command;
+
+    while(1){
+      curr_command = readline("enter cmd: ");
+
+      printf("You entered %s\n", curr_command);
+
+      char* test_cmd = "ls|wc";
     printf("test cmd %s\n", test_cmd);
 
     char* curr_cmd = malloc(sizeof(test_cmd));
@@ -147,6 +154,11 @@ int main(){
                     
     }
 
-    return 1;
+    
 
+
+    }
+
+    return 1;
+    
 }

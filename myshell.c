@@ -12,6 +12,10 @@ int PATH_MAX = 100;
 
 int n_spaces = 0;
 char* redir_target;
+char* routeTo;
+int redir_exists = 0;
+
+struct command* cmds_exec; //ARRAY OF COMMANDS TO BE POPULATED
 
 struct command
 {
@@ -52,13 +56,6 @@ fork_pipes (int n, struct command *cmd)
   pid_t pid;
   int in, fd [2];
 
-  int status = 0;
-  int wpid;
-
-  int stdin = 0;
-  int stdout = 1;
-  int temp_stdout;
-
   /* The first process should get its input from the original file descriptor 0.  */
   in = 0;
 
@@ -70,7 +67,6 @@ fork_pipes (int n, struct command *cmd)
       /* f [1] is the write end of the pipe, we carry `in` from the prev iteration.  */
       spawn_proc (in, fd [1], cmd + i);
 
-      temp_stdout = fd[1];
       /* No need for the write end of the pipe, the child will write here.  */
       close (fd [1]);
       
@@ -80,35 +76,42 @@ fork_pipes (int n, struct command *cmd)
       
     }
 
-    // char* test = readline("enter smth");
-    //   printf("test is %s\n", test);
-    printf("in is %d\n", in);
     
   /* Last stage of the pipeline - set stdin be the read end of the previous pipe
      and output to the original file descriptor 1. */  
   if (in != 0){
     printf("in, 0\n");
     dup2 (in, 0);
-    //dup2(temp_stdout, 1);
   }
-    
+  
   /* Execute the last stage with the current process. */
-  //printf("last cmd %s\n", cmd[i].argv[0]);
-  if(fork() == 0){
-      execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
-  }else{
-    while ((wpid = wait(&status)) > 0);
-      //wait(NULL);
-        //printf("in is %d out is %d]\n", in, fd[1]);
-      // close (fd [0]);
-      // close (fd [1]);
-
-      // char* test = readline("");
-      // printf("test is %s\n", test);
-
-      return 1;
-  }
   //FOR LAST CMD, CHECK IF REDIR EXISTS (> OR >>), IF IT DOES, INSTEAD OF STDOUT, DIRECT TO FILE
+  if(redir_exists){
+    int file_desc;
+    if(strcmp(redir_target,">") == 0){
+      //remove file if it already exists
+      remove(routeTo);
+      //create a new file
+      FILE *fp;
+      fp  = fopen (routeTo, "w");
+      fclose (fp);
+      //initialize file desc with both write and append options
+      file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+      printf("its write\n");
+    }
+    else{
+      file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+      printf("its append\n");
+    }
+        
+                                
+    // here the newfd is the file descriptor of stdout (i.e. 1) 
+    dup2(file_desc, 1); 
+    close(file_desc);
+  }
+ 
+  return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
+  
 }
 
 int main(int argc, char **argv) {
@@ -119,15 +122,13 @@ int main(int argc, char **argv) {
 
     char* curr_command = malloc(sizeof(char)* 200);
 
-
-    int redir_exists = 0;
     int pipe_exists = 0;
 
     int file_desc; //stores the current file descriptor
     int save_stdin;
     
 
-    struct command* cmds_exec;
+    
     
     while(1){
       
@@ -163,7 +164,6 @@ int main(int argc, char **argv) {
                 }
 
                 char* cmdToRoute;
-                char* routeTo;
 
                 if(ptr){ //it has > or >>
                     char* token_a = strtok(curr_token, redir_target);
@@ -217,57 +217,22 @@ int main(int argc, char **argv) {
                     //cmds_exec [1]; //handling 1 command
                     cmds_exec = malloc(1 * sizeof(struct command));
                 }
-                
 
-                for(j= 0; j <= p_spaces; j++){
-                    if(pipe_exists){
-                        strcpy(curr_token, pipe_tokens[j]);
-                    }
-                    char* tok = malloc(sizeof(curr_token));
-                    strcpy(tok, curr_token);
-
-                    printf("j is %d tok is %s\n", j, tok);
-
-                    //TOKENIZE EACH CMD BY SPACE
-                    cmds_exec[j].argv = NULL;
-                    char *  p  = strtok (tok, " ");
-                    int n_spaces = 0;
-                    int i = 0;
-
-                    /* split string and append tokens to cmds array */
-                    while (p) {
-                        cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * ++n_spaces);
-
-                        if (cmds_exec[j].argv == NULL)
-                            exit (-1); /* memory allocation failed */
-
-                        cmds_exec[j].argv[n_spaces-1] = p;
-
-                        p = strtok (NULL, " ");
-                    }
-
-                    /* realloc one extra element for the last NULL */
-                    cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * (n_spaces+1));
-                    cmds_exec[j].argv[n_spaces] = 0;
-
-                    /* print the result */
-                    for (i = 0; i < (n_spaces+1); ++i)
-                        printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
-
-
-                    if(j == p_spaces-1) break;
-                }
+                //TOKENIZES EACH CMD BY SPACE AND POPULATES GLOBAL CMD ARRAY
+                populateCommands(curr_token, p_spaces, pipe_exists, pipe_tokens);
 
                 
                 //COMMANDS ARE POPULATED
-                if(pipe_exists){
+                if(fork() == 0){
+                  if(pipe_exists){
                     fork_pipes(p_spaces, cmds_exec);
-                }
+                  }
                 else{
                     fork_pipes(1, cmds_exec);
+                  }
+                }else{
+                  wait(NULL);
                 }
-                
-
 
                 //RESET STUFF BEFORE NEXT CMD          
                 pipe_exists = 0;
@@ -281,5 +246,47 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
+
+}
+
+void populateCommands(char* curr_token, int p_spaces, int pipe_exists, char** pipe_tokens){
+  for(int j= 0; j <= p_spaces; j++){
+    if(pipe_exists){
+      strcpy(curr_token, pipe_tokens[j]);
+    }
+    char* tok = malloc(sizeof(curr_token));
+    strcpy(tok, curr_token);
+
+    printf("j is %d tok is %s\n", j, tok);
+
+     //TOKENIZE EACH CMD BY SPACE
+    cmds_exec[j].argv = NULL;
+    char *  p  = strtok (tok, " ");
+    int n_spaces = 0;
+    int i = 0;
+
+    /* split string and append tokens to cmds array */
+    while (p) {
+      cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * ++n_spaces);
+
+      if (cmds_exec[j].argv == NULL)
+        exit (-1); /* memory allocation failed */
+
+      cmds_exec[j].argv[n_spaces-1] = p;
+
+      p = strtok (NULL, " ");
+    }
+
+    /* realloc one extra element for the last NULL */
+    cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * (n_spaces+1));
+    cmds_exec[j].argv[n_spaces] = 0;
+
+    /* print the result */
+    for (i = 0; i < (n_spaces+1); ++i)
+      printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
+
+
+    if(j == p_spaces-1) break;
+  }
 
 }
