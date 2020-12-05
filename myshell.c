@@ -12,7 +12,7 @@ int PATH_MAX = 100;
 
 int n_spaces = 0;
 char* redir_target;
-char* routeTo;
+char* routeFile; //USED AD FILENAME BUFFER FOR >/>>
 int redir_exists = 0;
 
 struct command* cmds_exec; //ARRAY OF COMMANDS TO BE POPULATED
@@ -90,17 +90,17 @@ fork_pipes (int n, struct command *cmd)
     int file_desc;
     if(strcmp(redir_target,">") == 0){
       //remove file if it already exists
-      remove(routeTo);
+      remove(routeFile);
       //create a new file
       FILE *fp;
-      fp  = fopen (routeTo, "w");
+      fp  = fopen (routeFile, "w");
       fclose (fp);
       //initialize file desc with both write and append options
-      file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+      file_desc = open(routeFile, O_WRONLY|O_APPEND); 
       printf("its write\n");
     }
     else{
-      file_desc = open(routeTo, O_WRONLY|O_APPEND); 
+      file_desc = open(routeFile, O_WRONLY|O_APPEND); 
       printf("its append\n");
     }
         
@@ -126,6 +126,7 @@ int main(int argc, char **argv) {
     char curr_cmd[100];
 
     char* curr_command = malloc(sizeof(char)* 200);
+    routeFile = malloc(100);
 
     int pipe_exists = 0;
 
@@ -169,6 +170,7 @@ int main(int argc, char **argv) {
                 }
 
                 char* cmdToRoute;
+                char* routeTo;
 
                 if(ptr){ //it has > or >>
                     char* token_a = strtok(curr_token, redir_target);
@@ -176,8 +178,12 @@ int main(int argc, char **argv) {
                     token_a = strtok(NULL, redir_target);
                     routeTo = token_a;
 
+                    //routeTo = trimwhitespace(routeTo);
+                    trimwhitespace(routeFile, sizeof(routeTo)+1, routeTo);
+
                     printf("cmd to Route: %s\n", cmdToRoute);
                     printf("routeTo: %s\n", routeTo);
+                    printf("routeFile: %s\n", routeFile);
 
                     redir_exists = 1;
                 }
@@ -295,3 +301,36 @@ void populateCommands(char* curr_token, int p_spaces, int pipe_exists, char** pi
   }
 
 }
+
+void trimwhitespace(char *out, size_t len, const char *str)
+{
+  if(len == 0)
+    return 0;
+
+  const char *end;
+  size_t out_size;
+
+  // Trim leading space
+  while(isspace((unsigned char)*str)) str++;
+
+  if(*str == 0)  // All spaces?
+  {
+    *out = 0;
+    return 1;
+  }
+
+  // Trim trailing space
+  end = str + strlen(str) - 1;
+  while(end > str && isspace((unsigned char)*end)) end--;
+  end++;
+
+  // Set output size to minimum of trimmed string length and buffer size minus 1
+  out_size = (end - str) < len-1 ? (end - str) : len-1;
+
+  // Copy trimmed string and add null terminator
+  memcpy(out, str, out_size);
+  out[out_size] = 0;
+
+  return out_size;
+}
+
