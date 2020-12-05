@@ -18,6 +18,7 @@ int redir_exists = 0;
 
 pid_t pid;
 int * status =0;
+int processToKill = 0;
 
 struct command* cmds_exec; //ARRAY OF COMMANDS TO BE POPULATED
 
@@ -124,15 +125,17 @@ fork_pipes (int n, struct command *cmd)
 }
 
 void sigintHandler(int sig_num){
-
-  printf("RING! RING! Ctrl+C is here\n");
-  kill(pid, SIGTERM);
-  pid_t waitId = waitpid(pid, &status, WNOHANG);
-  if(waitId ==0){ //waitId is 0 if no child has returned
-    kill(pid, SIGKILL);
+  if(processToKill){
+    printf("RING! RING! Ctrl+C is here\n");
+    kill(pid, SIGTERM);
+    pid_t waitId = waitpid(pid, &status, WNOHANG);
+    if(waitId ==0){ //waitId is 0 if no child has returned
+      kill(pid, SIGKILL);
+    }
+    waitpid(pid, &status,0); //harvest the zombie process
+    printf("Exiting the program\n");
   }
-  waitpid(pid, &status,0); //harvest the zombie process
-  printf("Exiting the program\n");
+  
 }
 
 int main(int argc, char **argv) {
@@ -148,6 +151,8 @@ int main(int argc, char **argv) {
 
     int file_desc; //stores the current file descriptor
     int save_stdin;
+
+    signal(SIGINT, sigintHandler);
     
 
     
@@ -252,8 +257,6 @@ int main(int argc, char **argv) {
                 //COMMANDS ARE POPULATED
                 pid = fork();
 		
-		            signal(SIGINT, sigintHandler);
-
                 if(pid == 0){
                   if(pipe_exists){
                     fork_pipes(p_spaces, cmds_exec);
@@ -262,12 +265,14 @@ int main(int argc, char **argv) {
                     fork_pipes(1, cmds_exec);
                   }
                 }else{
+                  processToKill = 1; //SIGINT HANDLER ACTIVATED
                   wait(NULL);
                 }
 
                 //RESET STUFF BEFORE NEXT CMD          
                 pipe_exists = 0;
                 redir_exists = 0;
+                processToKill = 0;
             }
 
 
