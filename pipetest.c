@@ -74,6 +74,19 @@ fork_pipes (int n, struct command *cmd)
   //FOR LAST CMD, CHECK IF REDIR EXISTS (> OR >>), IF IT DOES, INSTEAD OF STDOUT, DIRECT TO FILE
 }
 
+void sigintHandler(int sig_num){
+
+  printf("RING! RING! Ctrl+C is here\n");
+  kill(pid, SIGTERM);
+  sleep(10);
+  pid_t waitId = waitpid(pid, &status, WNOHANG);
+  if(waitId ==0){ //waitId is 0 if no child has returned
+    kill(pid, SIGKILL);
+  }
+  waitpid(pid, &status,0); //harvest the zombie process
+  printf("Exiting the program\n");
+}
+
 int main() 
 { 
 

@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-#include<fcntl.h> 
+#include<fcntl.h>
+#include<signal.h>
 
 int PATH_MAX = 100;
 
@@ -14,7 +15,8 @@ int n_spaces = 0;
 char* redir_target;
 char* routeTo;
 int redir_exists = 0;
-
+pid_t pid;
+int * status =0;
 struct command* cmds_exec; //ARRAY OF COMMANDS TO BE POPULATED
 
 struct command
@@ -22,6 +24,18 @@ struct command
   const char **argv;
 };
 
+void sighandler(int sig_num){
+  printf("Received the signal\n");
+  kill(pid, SIGTERM);
+  sleep(50);
+  pid_t waitId = waitpid(pid, &status, WNOHANG); //returns immdeiately if no child has returned
+  if(waitId ==0){
+    kill(pid,SIGKILL);//waitId is 0 if no child has returned
+  }
+  waitpid(pid, &status,0); //harvests the zombie process
+  printf("Exiting the program\n");
+
+}
 int
 spawn_proc (int in, int out, struct command *cmd)
 {
@@ -118,6 +132,20 @@ fork_pipes (int n, struct command *cmd)
   return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
   
 }
+void sigintHandler(int sig_num){
+
+  printf("RING! RING! Ctrl+C is here\n");
+  kill(pid, SIGTERM);
+  sleep(30);
+  pid_t waitId = waitpid(pid, &status, WNOHANG);
+  if(waitId ==0){ //waitId is 0 if no child has returned
+    kill(pid, SIGKILL);
+  }
+  waitpid(pid, &status,0); //harvest the zombie process
+  printf("Exiting the program\n");
+}
+
+
 
 int main(int argc, char **argv) {
 
@@ -228,21 +256,34 @@ int main(int argc, char **argv) {
 
                 
                 //COMMANDS ARE POPULATED
-                if(fork() == 0){
+		//int i =1;
+		pid = fork();
+		
+		signal(SIGINT, sigintHandler);
+                if(pid == 0){
+		  printf("IN the foorked process\n");
+
+		  //while(1){
+		  // }
                   if(pipe_exists){
                     fork_pipes(p_spaces, cmds_exec);
                   }
                 else{
                     fork_pipes(1, cmds_exec);
-                  }
+		  }
+		  //i--;
+		  // }
+                  
                 }else{
                   wait(NULL);
                 }
-
+		  
+		
+		printf("Back in the main function\n");
                 //RESET STUFF BEFORE NEXT CMD          
                 pipe_exists = 0;
                 redir_exists = 0;
-            }
+		}
 
 
         }
