@@ -4,7 +4,7 @@ CFLAGS = -lreadline
 all: cshell.a
 
 cshell.a: cshell.o
-	     $(CC) $(CFLAGS) cshell.c -o cshell
+	     $(CC) cshell.c -o cshell $(CFLAGS)
 
 clean:
-		 rm -rf *.o *.a
+		 rm -rf *.o *.a cshell

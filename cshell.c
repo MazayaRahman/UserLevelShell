@@ -27,7 +27,7 @@ struct command* cmds_exec; //ARRAY OF COMMANDS TO BE POPULATED
 
 struct command
 {
-  const char **argv;
+  char **argv;
 };
 
 int
@@ -105,11 +105,6 @@ fork_function (int n, struct command *cmd)
     dup2(file_desc, 1); 
     close(file_desc);
   }
-  //CHECK IF ITS A CD COMMAND
-  else if(strcmp(cmd [i].argv [0], "cd") == 0){
-    chdir(cmd [i].argv [1]);
-    return 0;
-  }
  
   return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
   
@@ -134,8 +129,9 @@ int main(int argc, char **argv) {
     char curr_token[100];
     char curr_cmd[100];
 
-    char* curr_command = malloc(sizeof(char)* 200);
+    char* curr_command = malloc(sizeof(char)* 500);
     routeFile = malloc(100);
+
 
     int pipe_exists = 0;
 
@@ -150,7 +146,7 @@ int main(int argc, char **argv) {
     while(1){
       
         if(getcwd(cwd, sizeof(cwd)) != NULL) { //SHOULD THIS BE A WHILE LOOP..?
-            printf("%s $", cwd);
+            printf("%s$ ", cwd);
 
             curr_command = readline("");
             if(curr_command == NULL) curr_command = readline("");
@@ -167,6 +163,14 @@ int main(int argc, char **argv) {
 
                 memset(curr_token, '\0', sizeof(curr_token));
                 strcpy(curr_token, token);
+
+                char* exit_token = malloc(sizeof(curr_token));
+                remove_space(exit_token, sizeof(curr_token)+2, curr_token);
+                if(strcmp(exit_token, "exit") == 0){
+                    free(exit_token);
+                    return 1;
+                }
+                free(exit_token);
 
                 token = strtok(NULL, ";");
 
@@ -188,7 +192,7 @@ int main(int argc, char **argv) {
                     routeTo = token_a;
 
                     //routeTo = trimwhitespace(routeTo);
-                    remove_space(routeFile, sizeof(routeTo)+1, routeTo);
+                    remove_space(routeFile, sizeof(routeTo)+2, routeTo);
 
 
                     redir_exists = 1;
@@ -221,10 +225,8 @@ int main(int argc, char **argv) {
                         pipe_ptr = strtok(NULL, "|");
                     }
 
-                    for (int f = 0; f < (p_spaces); ++f)
-
                     //SET UP COMMANDS BY MALLOCING ARRAY OF CMDS
-                    cmds_exec = malloc(2 * sizeof(struct command));
+                    cmds_exec = malloc(p_spaces * sizeof(struct command));
                     //cmds_exec [p_spaces]; //# of commands = # of piped tokens
                 }
                 else{
@@ -235,7 +237,18 @@ int main(int argc, char **argv) {
                 //TOKENIZES EACH CMD BY SPACE AND POPULATES GLOBAL CMD ARRAY
                 adding_Commands(curr_token, p_spaces, pipe_exists, pipe_tokens);
 
-                
+                if(strcmp(cmds_exec[0].argv[0], "cd") == 0){
+                  chdir(cmds_exec[0].argv [1]);
+                  //RESET STUFF BEFORE NEXT CMD          
+                  pipe_exists = 0;
+                  redir_exists = 0;
+                  processToKill = 0;
+
+                  for (int f = 0; f < (p_spaces); ++f)
+                      free(cmds_exec[f].argv);
+                  free(cmds_exec);
+                  continue;
+                }
                 //COMMANDS ARE POPULATED
                 pid = fork();
 		
@@ -255,6 +268,10 @@ int main(int argc, char **argv) {
                 pipe_exists = 0;
                 redir_exists = 0;
                 processToKill = 0;
+
+                for (int f = 0; f < (p_spaces); ++f)
+                    free(cmds_exec[f].argv);
+                free(cmds_exec);
             }
 
 
@@ -264,6 +281,10 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
+
+    //free memory
+    free(curr_command);
+    free(routeFile);
 
 }
 
@@ -287,6 +308,7 @@ void adding_Commands(char* curr_token, int p_spaces, int pipe_exists, char** pip
       if (cmds_exec[j].argv == NULL)
         exit (-1); /* memory allocation failed */
 
+      
       cmds_exec[j].argv[n_spaces-1] = p;
 
       p = strtok (NULL, " ");
@@ -295,9 +317,11 @@ void adding_Commands(char* curr_token, int p_spaces, int pipe_exists, char** pip
     cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * (n_spaces+1));
     cmds_exec[j].argv[n_spaces] = 0;
 
-    if(j == p_spaces-1) break;
+    if(j == p_spaces-1) {
+      //free(tok);
+      break;
+    }
   }
-
 }
 
 void remove_space(char *out, size_t len, const char *str)
