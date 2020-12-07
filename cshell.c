@@ -4,11 +4,14 @@
 #include <sys/types.h>
 #include <sys/wait.h> 
 #include <stdlib.h>
+#include<ctype.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include<fcntl.h> 
 #include <signal.h>
 
+void adding_Commands(char *, int, int, char **);
+void remove_space(char *, size_t , const char *);
 int PATH_MAX = 100;
 
 int n_spaces = 0;
@@ -28,24 +31,22 @@ struct command
 };
 
 int
-spawn_proc (int in, int out, struct command *cmd)
+spawnProcess (int pipe_in, int pipe_out, struct command *cmd)
 {
   pid_t pid;
 
   if ((pid = fork ()) == 0)
     {
-      if (in != 0)
+      if (pipe_in != 0)
         {
-        printf("should not run in first command\n");
-          dup2 (in, 0);
-          close (in);
+          dup2 (pipe_in, 0);
+          close (pipe_in);
         }
 
-      if (out != 1)
+      if (pipe_out != 1)
         {
-        printf("setting output to fd\n");
-          dup2 (out, 1); //comd output to pipe out
-          close (out);
+          dup2 (pipe_out, 1); //comd output to pipe out
+          close (pipe_out);
         }
 
       return execvp (cmd->argv [0], (char * const *)cmd->argv);
@@ -55,41 +56,33 @@ spawn_proc (int in, int out, struct command *cmd)
 }
 
 int
-fork_pipes (int n, struct command *cmd)
+fork_function (int n, struct command *cmd)
 {
   int i;
   pid_t pid;
-  int in, fd [2];
+  int pipe_in, fd [2];
 
-  /* The first process should get its input from the original file descriptor 0.  */
-  in = 0;
+  pipe_in = 0; //first process getting the input
 
-  /* Note the loop bound, we spawn here all, but the last stage of the pipeline.  */
   for (i = 0; i < n - 1; ++i)
     {
       pipe (fd);
 
-      /* f [1] is the write end of the pipe, we carry `in` from the prev iteration.  */
-      spawn_proc (in, fd [1], cmd + i);
+      spawnProcess (pipe_in, fd [1], cmd + i);
 
-      /* No need for the write end of the pipe, the child will write here.  */
       close (fd [1]);
       
-
-      /* Keep the read end of the pipe, the next child will read from there.  */
-      in = fd [0];
+      pipe_in = fd [0]; //next child will read from here.
       
     }
 
     
-  /* Last stage of the pipeline - set stdin be the read end of the previous pipe
-     and output to the original file descriptor 1. */  
-  if (in != 0){
-    printf("in, 0\n");
-    dup2 (in, 0);
+ 
+  if (pipe_in != 0){ //stdin the read end of the previous file and output it to the original file descriptor 1
+    dup2 (pipe_in, 0);
   }
   
-  /* Execute the last stage with the current process. */
+  
   //FOR LAST CMD, CHECK IF REDIR EXISTS (> OR >>), IF IT DOES, INSTEAD OF STDOUT, DIRECT TO FILE
   if(redir_exists){
     int file_desc;
@@ -102,11 +95,9 @@ fork_pipes (int n, struct command *cmd)
       fclose (fp);
       //initialize file desc with both write and append options
       file_desc = open(routeFile, O_WRONLY|O_APPEND); 
-      printf("its write\n");
     }
     else{
       file_desc = open(routeFile, O_WRONLY|O_APPEND); 
-      printf("its append\n");
     }
         
                                 
@@ -117,7 +108,7 @@ fork_pipes (int n, struct command *cmd)
   //CHECK IF ITS A CD COMMAND
   else if(strcmp(cmd [i].argv [0], "cd") == 0){
     chdir(cmd [i].argv [1]);
-    return;
+    return 0;
   }
  
   return execvp (cmd [i].argv [0], (char * const *)cmd [i].argv); //LAST PIPE CMD
@@ -126,14 +117,13 @@ fork_pipes (int n, struct command *cmd)
 
 void sigintHandler(int sig_num){
   if(processToKill){
-    printf("RING! RING! Ctrl+C is here\n");
     kill(pid, SIGTERM);
-    pid_t waitId = waitpid(pid, &status, WNOHANG);
+    pid_t waitId = waitpid(pid, status, WNOHANG);
     if(waitId ==0){ //waitId is 0 if no child has returned
       kill(pid, SIGKILL);
     }
-    waitpid(pid, &status,0); //harvest the zombie process
-    printf("Exiting the program\n");
+    waitpid(pid, status,0); //harvest the zombie process
+  
   }
   
 }
@@ -165,7 +155,7 @@ int main(int argc, char **argv) {
             curr_command = readline("");
             if(curr_command == NULL) curr_command = readline("");
 
-            printf("You entered %s\n", curr_command);
+           
 
             if(strcmp(curr_command, "exit") == 0){
                 break;
@@ -174,13 +164,11 @@ int main(int argc, char **argv) {
             //TOKENIZE BY ;
             char* token = strtok(curr_command, ";");
             while(token){
-                printf("token %s\n", token);
 
                 memset(curr_token, '\0', sizeof(curr_token));
                 strcpy(curr_token, token);
 
                 token = strtok(NULL, ";");
-                printf("curr token %s\n", curr_token);
 
                 //SPLIT CURR TOKEN BY > OR >> IF THEY EXIST
                 redir_target = ">>";
@@ -200,22 +188,17 @@ int main(int argc, char **argv) {
                     routeTo = token_a;
 
                     //routeTo = trimwhitespace(routeTo);
-                    trimwhitespace(routeFile, sizeof(routeTo)+1, routeTo);
+                    remove_space(routeFile, sizeof(routeTo)+1, routeTo);
 
-                    printf("cmd to Route: %s\n", cmdToRoute);
-                    printf("routeTo: %s\n", routeTo);
-                    printf("routeFile: %s\n", routeFile);
 
                     redir_exists = 1;
                 }
 
-                printf("curr token %s\n", curr_token);
 
                 //SAVE CURR TOKEN HERE IF NEEDED
                 memset(curr_cmd, '\0', sizeof(curr_cmd));
                 strcpy(curr_cmd, curr_token);
 
-                printf("curr cmd %s\n", curr_cmd);
 
                 //TOKENIZE BY PIPE
                 char ** pipe_tokens = NULL;
@@ -239,7 +222,6 @@ int main(int argc, char **argv) {
                     }
 
                     for (int f = 0; f < (p_spaces); ++f)
-                    printf ("pipe_tokens[%d] = %s\n", f, pipe_tokens[f]);
 
                     //SET UP COMMANDS BY MALLOCING ARRAY OF CMDS
                     cmds_exec = malloc(2 * sizeof(struct command));
@@ -251,7 +233,7 @@ int main(int argc, char **argv) {
                 }
 
                 //TOKENIZES EACH CMD BY SPACE AND POPULATES GLOBAL CMD ARRAY
-                populateCommands(curr_token, p_spaces, pipe_exists, pipe_tokens);
+                adding_Commands(curr_token, p_spaces, pipe_exists, pipe_tokens);
 
                 
                 //COMMANDS ARE POPULATED
@@ -259,10 +241,10 @@ int main(int argc, char **argv) {
 		
                 if(pid == 0){
                   if(pipe_exists){
-                    fork_pipes(p_spaces, cmds_exec);
+                    fork_function(p_spaces, cmds_exec);
                   }
                 else{
-                    fork_pipes(1, cmds_exec);
+                    fork_function(1, cmds_exec);
                   }
                 }else{
                   processToKill = 1; //SIGINT HANDLER ACTIVATED
@@ -285,7 +267,7 @@ int main(int argc, char **argv) {
 
 }
 
-void populateCommands(char* curr_token, int p_spaces, int pipe_exists, char** pipe_tokens){
+void adding_Commands(char* curr_token, int p_spaces, int pipe_exists, char** pipe_tokens){
   for(int j= 0; j <= p_spaces; j++){
     if(pipe_exists){
       strcpy(curr_token, pipe_tokens[j]);
@@ -293,15 +275,12 @@ void populateCommands(char* curr_token, int p_spaces, int pipe_exists, char** pi
     char* tok = malloc(sizeof(curr_token));
     strcpy(tok, curr_token);
 
-    printf("j is %d tok is %s\n", j, tok);
-
      //TOKENIZE EACH CMD BY SPACE
     cmds_exec[j].argv = NULL;
     char *  p  = strtok (tok, " ");
     int n_spaces = 0;
     int i = 0;
 
-    /* split string and append tokens to cmds array */
     while (p) {
       cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * ++n_spaces);
 
@@ -313,49 +292,40 @@ void populateCommands(char* curr_token, int p_spaces, int pipe_exists, char** pi
       p = strtok (NULL, " ");
     }
 
-    /* realloc one extra element for the last NULL */
     cmds_exec[j].argv = realloc (cmds_exec[j].argv, sizeof (char*) * (n_spaces+1));
     cmds_exec[j].argv[n_spaces] = 0;
-
-    /* print the result */
-    for (i = 0; i < (n_spaces+1); ++i)
-      printf ("args[%d] = %s\n", i, cmds_exec[j].argv[i]);
-
 
     if(j == p_spaces-1) break;
   }
 
 }
 
-void trimwhitespace(char *out, size_t len, const char *str)
+void remove_space(char *out, size_t len, const char *str)
 {
   if(len == 0)
-    return 0;
+    return;
 
   const char *end;
-  size_t out_size;
+  size_t output;
 
-  // Trim leading space
   while(isspace((unsigned char)*str)) str++;
 
-  if(*str == 0)  // All spaces?
+  if(*str == 0)  
   {
     *out = 0;
-    return 1;
+    return;
   }
 
-  // Trim trailing space
+  
   end = str + strlen(str) - 1;
   while(end > str && isspace((unsigned char)*end)) end--;
   end++;
 
-  // Set output size to minimum of trimmed string length and buffer size minus 1
-  out_size = (end - str) < len-1 ? (end - str) : len-1;
+  output = (end - str) < len-1 ? (end - str) : len-1;
 
-  // Copy trimmed string and add null terminator
-  memcpy(out, str, out_size);
-  out[out_size] = 0;
+  memcpy(out, str, output); 
+  out[output] = 0;
 
-  return out_size;
+  return;
 }
 
